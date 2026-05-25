@@ -558,6 +558,18 @@ function loop(now: number) {
 
 window.addEventListener("resize", resize);
 
+window.addEventListener(
+  "touchmove",
+  (event) => {
+    event.preventDefault();
+  },
+  { passive: false }
+);
+
+window.addEventListener("gesturestart", (event) => {
+  event.preventDefault();
+});
+
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   if (["a", "d", "z", "c", "arrowleft", "arrowright", " "].includes(key)) {

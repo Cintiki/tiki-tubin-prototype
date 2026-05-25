@@ -8,6 +8,7 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #287f65;
   color: #103a3f;
   font-family:
@@ -19,6 +20,8 @@ body {
   position: fixed;
   inset: 0;
   overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 canvas {
@@ -72,6 +75,7 @@ canvas {
   inset: 0;
   z-index: 6;
   pointer-events: none;
+  touch-action: none;
 }
 
 .paddle-cluster {
@@ -91,6 +95,7 @@ canvas {
 }
 
 .touch-button {
+  position: relative;
   width: clamp(46px, 12vw, 70px);
   aspect-ratio: 1;
   border: 2px solid rgb(229 255 255 / 70%);
@@ -103,10 +108,17 @@ canvas {
     0 3px 10px rgb(0 28 38 / 30%);
   color: #dfffff;
   font: 900 clamp(22px, 6vw, 34px) / 1 system-ui, sans-serif;
-  touch-action: manipulation;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+.touch-button::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
 }
 
 .touch-button:active,
