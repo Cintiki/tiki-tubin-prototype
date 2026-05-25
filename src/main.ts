@@ -62,7 +62,8 @@ const pendingStroke = {
 };
 
 const river = {
-  width: 520,
+  maxWidth: 520,
+  minBankInset: 32,
   bankWidth: 260
 };
 
@@ -139,6 +140,10 @@ function worldToScreen(point: Vec): Vec {
     x: width / 2 + point.x,
     y: height / 2 + point.y - cameraY
   };
+}
+
+function getRiverWidth() {
+  return Math.min(river.maxWidth, Math.max(260, width - river.minBankInset * 2));
 }
 
 function applyStroke(side: StrokeSide, now: number, bypassCooldown = false) {
@@ -285,7 +290,7 @@ function getLocalCurrent(): Vec {
 }
 
 function handleBankCollision() {
-  const halfRiver = river.width / 2;
+  const halfRiver = getRiverWidth() / 2;
   const limit = halfRiver - tuning.tubeRadius;
 
   if (player.position.x < -limit) {
@@ -390,11 +395,12 @@ function drawRiver() {
   ctx.fillStyle = "#5daa61";
   ctx.fillRect(0, 0, width, height);
 
-  const riverLeft = width / 2 - river.width / 2;
-  const riverRight = width / 2 + river.width / 2;
+  const riverWidth = getRiverWidth();
+  const riverLeft = width / 2 - riverWidth / 2;
+  const riverRight = width / 2 + riverWidth / 2;
 
   ctx.fillStyle = "#23a7c7";
-  ctx.fillRect(riverLeft, 0, river.width, height);
+  ctx.fillRect(riverLeft, 0, riverWidth, height);
 
   ctx.fillStyle = "#d8bd72";
   ctx.fillRect(riverLeft - 22, 0, 22, height);
@@ -413,7 +419,7 @@ function drawRiver() {
 
   ctx.strokeStyle = "rgba(15, 103, 123, 0.35)";
   ctx.lineWidth = 5;
-  ctx.strokeRect(riverLeft, -4, river.width, height + 8);
+  ctx.strokeRect(riverLeft, -4, riverWidth, height + 8);
 }
 
 function drawObstacles() {
