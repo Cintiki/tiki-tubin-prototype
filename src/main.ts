@@ -63,6 +63,7 @@ const pendingStroke = {
 
 const river = {
   width: 520,
+  minVisibleMargin: 28,
   bankWidth: 260
 };
 
@@ -90,6 +91,7 @@ const currentStreams: CurrentStream[] = [
 let width = 1;
 let height = 1;
 let dpr = 1;
+let worldScale = 1;
 let cameraY = 0;
 let lastTime = performance.now();
 let lastAnyStroke = -Infinity;
@@ -103,6 +105,7 @@ function resize() {
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  worldScale = Math.min(1, (width - river.minVisibleMargin * 2) / river.width);
 }
 
 function add(a: Vec, b: Vec): Vec {
@@ -136,9 +139,13 @@ function clamp(value: number, min: number, max: number): number {
 
 function worldToScreen(point: Vec): Vec {
   return {
-    x: width / 2 + point.x,
-    y: height / 2 + point.y - cameraY
+    x: width / 2 + point.x * worldScale,
+    y: height / 2 + (point.y - cameraY) * worldScale
   };
+}
+
+function screenDistance(distance: number) {
+  return distance * worldScale;
 }
 
 function applyStroke(side: StrokeSide, now: number, bypassCooldown = false) {
@@ -352,16 +359,18 @@ function render() {
 function drawCurrentStreams() {
   for (const stream of currentStreams) {
     const screen = worldToScreen({ x: stream.x, y: stream.y });
-    const top = screen.y - stream.height / 2;
+    const streamWidth = screenDistance(stream.width);
+    const streamHeight = screenDistance(stream.height);
+    const top = screen.y - streamHeight / 2;
 
-    if (top > height + 80 || top + stream.height < -80) {
+    if (top > height + 80 || top + streamHeight < -80) {
       continue;
     }
 
     const gradient = ctx.createLinearGradient(
-      screen.x - stream.width / 2,
+      screen.x - streamWidth / 2,
       0,
-      screen.x + stream.width / 2,
+      screen.x + streamWidth / 2,
       0
     );
     gradient.addColorStop(0, "rgba(180, 245, 255, 0)");
@@ -369,18 +378,18 @@ function drawCurrentStreams() {
     gradient.addColorStop(1, "rgba(180, 245, 255, 0)");
 
     ctx.fillStyle = gradient;
-    ctx.fillRect(screen.x - stream.width / 2, top, stream.width, stream.height);
+    ctx.fillRect(screen.x - streamWidth / 2, top, streamWidth, streamHeight);
 
     ctx.strokeStyle = "rgba(235, 255, 255, 0.55)";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = screenDistance(3);
     for (let line = 0; line < 6; line += 1) {
       const yOffset = ((line * 74 - cameraY * 0.95) % stream.height + stream.height) % stream.height;
       const y = top + yOffset;
-      const sway = Math.sin((stream.y + line * 31 + cameraY) * 0.012) * 13;
+      const sway = screenDistance(Math.sin((stream.y + line * 31 + cameraY) * 0.012) * 13);
 
       ctx.beginPath();
-      ctx.moveTo(screen.x - stream.width * 0.27 + sway, y);
-      ctx.quadraticCurveTo(screen.x + sway * 0.3, y + 30, screen.x + stream.width * 0.24, y + 70);
+      ctx.moveTo(screen.x - streamWidth * 0.27 + sway, y);
+      ctx.quadraticCurveTo(screen.x + sway * 0.3, y + screenDistance(30), screen.x + streamWidth * 0.24, y + screenDistance(70));
       ctx.stroke();
     }
   }
@@ -390,30 +399,32 @@ function drawRiver() {
   ctx.fillStyle = "#5daa61";
   ctx.fillRect(0, 0, width, height);
 
-  const riverLeft = width / 2 - river.width / 2;
-  const riverRight = width / 2 + river.width / 2;
+  const riverScreenWidth = screenDistance(river.width);
+  const riverLeft = width / 2 - riverScreenWidth / 2;
+  const riverRight = width / 2 + riverScreenWidth / 2;
+  const bankEdgeWidth = screenDistance(22);
 
   ctx.fillStyle = "#23a7c7";
-  ctx.fillRect(riverLeft, 0, river.width, height);
+  ctx.fillRect(riverLeft, 0, riverScreenWidth, height);
 
   ctx.fillStyle = "#d8bd72";
-  ctx.fillRect(riverLeft - 22, 0, 22, height);
-  ctx.fillRect(riverRight, 0, 22, height);
+  ctx.fillRect(riverLeft - bankEdgeWidth, 0, bankEdgeWidth, height);
+  ctx.fillRect(riverRight, 0, bankEdgeWidth, height);
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = screenDistance(2);
   for (let i = -2; i < 9; i += 1) {
-    const y = ((i * 150 - cameraY * 0.55) % 150 + 150) % 150;
-    const x = width / 2 + Math.sin((cameraY + i * 180) * 0.006) * 90;
+    const y = ((i * screenDistance(150) - cameraY * 0.55 * worldScale) % screenDistance(150) + screenDistance(150)) % screenDistance(150);
+    const x = width / 2 + screenDistance(Math.sin((cameraY + i * 180) * 0.006) * 90);
     ctx.beginPath();
-    ctx.moveTo(x - 32, y);
-    ctx.quadraticCurveTo(x, y + 22, x + 28, y + 54);
+    ctx.moveTo(x - screenDistance(32), y);
+    ctx.quadraticCurveTo(x, y + screenDistance(22), x + screenDistance(28), y + screenDistance(54));
     ctx.stroke();
   }
 
   ctx.strokeStyle = "rgba(15, 103, 123, 0.35)";
-  ctx.lineWidth = 5;
-  ctx.strokeRect(riverLeft, -4, river.width, height + 8);
+  ctx.lineWidth = screenDistance(5);
+  ctx.strokeRect(riverLeft, -4, riverScreenWidth, height + 8);
 }
 
 function drawObstacles() {
@@ -425,6 +436,7 @@ function drawObstacles() {
 
     ctx.save();
     ctx.translate(screen.x, screen.y);
+    ctx.scale(worldScale, worldScale);
 
     if (obstacle.kind === "rock") {
       ctx.fillStyle = "#6f7774";
@@ -465,6 +477,7 @@ function drawPlayer() {
 
   ctx.save();
   ctx.translate(screen.x, screen.y);
+  ctx.scale(worldScale, worldScale);
   ctx.rotate(player.angle);
 
   ctx.fillStyle = "#f4bf4d";
@@ -509,6 +522,7 @@ function drawStrokeFx() {
 
     ctx.save();
     ctx.translate(screen.x, screen.y);
+    ctx.scale(worldScale, worldScale);
     ctx.rotate(player.angle);
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = "#ffffff";
