@@ -1,0 +1,22 @@
+export const tuning = {
+  riverCurrentSpeed: 380,
+  fastCurrentSpeed: 1150,
+  leftRightStrokeImpulse: 98,
+  twoArmStrokeImpulse: 154,
+  strokeCooldownMs: 115,
+  twoArmTapWindowMs: 90,
+  strokeTorque: 6.8,
+  twoArmTorqueScale: 0.12,
+  linearDamping: 0.92,
+  angularDamping: 0.82,
+  angularDeadzone: 0.04,
+  rotationRecoveryStrength: 0,
+  forwardRecoveryStrength: 0,
+  maxSpeed: 950,
+  maxAngularVelocity: 7.2,
+  wallBounceStrength: 0.34,
+  obstacleBounceStrength: 0.48,
+  collisionSpinStrength: 2.1,
+  tubeRadius: 34,
+  cameraFollowStrength: 7.5
+};
