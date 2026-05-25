@@ -96,7 +96,7 @@ canvas {
 
 .touch-button {
   position: relative;
-  width: clamp(46px, 12vw, 70px);
+  width: clamp(54px, 14vw, 70px);
   aspect-ratio: 1;
   border: 2px solid rgb(229 255 255 / 70%);
   border-radius: 50%;
@@ -117,7 +117,7 @@ canvas {
 .touch-button::before {
   content: "";
   position: absolute;
-  inset: -14px;
+  inset: -18px;
   border-radius: 50%;
 }
 
