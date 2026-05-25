@@ -4,6 +4,7 @@ import "./styles.css";
 type Vec = { x: number; y: number };
 type StrokeSide = "left" | "right" | "both" | "leftReverse" | "rightReverse" | "bothReverse";
 type SingleStrokeSide = "left" | "right" | "leftReverse" | "rightReverse";
+type GameAction = "leftBack" | "leftForward" | "rightBack" | "rightForward" | "throw";
 
 type Player = {
   position: Vec;
@@ -205,6 +206,25 @@ function queueStroke(side: SingleStrokeSide, now: number) {
       applyStroke(queuedSide, performance.now());
     }
   }, tuning.twoArmTapWindowMs);
+}
+
+function triggerAction(action: GameAction, now: number) {
+  switch (action) {
+    case "leftBack":
+      queueStroke("leftReverse", now);
+      break;
+    case "leftForward":
+      queueStroke("left", now);
+      break;
+    case "rightBack":
+      queueStroke("rightReverse", now);
+      break;
+    case "rightForward":
+      queueStroke("right", now);
+      break;
+    case "throw":
+      break;
+  }
 }
 
 function updatePlayer(dt: number) {
@@ -563,7 +583,7 @@ window.addEventListener("keydown", (event) => {
       pendingStroke.timer = 0;
       applyStroke("both", now, true);
     } else {
-      queueStroke("left", now);
+      triggerAction("leftForward", now);
     }
   }
 
@@ -574,7 +594,7 @@ window.addEventListener("keydown", (event) => {
       pendingStroke.timer = 0;
       applyStroke("both", now, true);
     } else {
-      queueStroke("right", now);
+      triggerAction("rightForward", now);
     }
   }
 
@@ -585,7 +605,7 @@ window.addEventListener("keydown", (event) => {
       pendingStroke.timer = 0;
       applyStroke("bothReverse", now, true);
     } else {
-      queueStroke("leftReverse", now);
+      triggerAction("leftBack", now);
     }
   }
 
@@ -596,7 +616,7 @@ window.addEventListener("keydown", (event) => {
       pendingStroke.timer = 0;
       applyStroke("bothReverse", now, true);
     } else {
-      queueStroke("rightReverse", now);
+      triggerAction("rightBack", now);
     }
   }
 });
@@ -652,6 +672,29 @@ canvas.addEventListener("mousedown", (event) => {
   }
 
   queueStroke(event.button === 2 ? "right" : "left", now);
+});
+
+document.querySelectorAll<HTMLButtonElement>("[data-action]").forEach((button) => {
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    const action = button.dataset.action as GameAction | undefined;
+
+    if (!action) {
+      return;
+    }
+
+    button.classList.add("is-pressed");
+    button.setPointerCapture(event.pointerId);
+    triggerAction(action, performance.now());
+  });
+
+  button.addEventListener("pointerup", () => {
+    button.classList.remove("is-pressed");
+  });
+
+  button.addEventListener("pointercancel", () => {
+    button.classList.remove("is-pressed");
+  });
 });
 
 canvas.addEventListener("contextmenu", (event) => {

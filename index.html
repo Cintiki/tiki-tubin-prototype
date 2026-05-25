@@ -6,7 +6,44 @@
     <title>TIKI TUBIN Prototype</title>
   </head>
   <body>
-    <canvas id="game" aria-label="TIKI TUBIN paddle-feel prototype"></canvas>
+    <main class="game-shell" aria-label="TIKI TUBIN paddle-feel prototype">
+      <canvas id="game"></canvas>
+
+      <section class="hud" aria-label="Player status">
+        <div class="hud-player">
+          <span>Larry</span>
+          <strong>4564</strong>
+        </div>
+        <div class="hud-stats">
+          <span>tubes: x3</span>
+          <span>punctures: 0/3</span>
+        </div>
+      </section>
+
+      <section class="touch-controls" aria-label="Touch controls">
+        <div class="paddle-cluster paddle-cluster-left">
+          <button class="touch-button" type="button" data-action="leftBack" aria-label="Paddle back left">
+            <span aria-hidden="true">▲</span>
+          </button>
+          <button class="touch-button" type="button" data-action="leftForward" aria-label="Paddle forward left">
+            <span aria-hidden="true">▼</span>
+          </button>
+        </div>
+
+        <button class="touch-button throw-button" type="button" data-action="throw" aria-label="Throw coconut">
+          <span aria-hidden="true">●</span>
+        </button>
+
+        <div class="paddle-cluster paddle-cluster-right">
+          <button class="touch-button" type="button" data-action="rightBack" aria-label="Paddle back right">
+            <span aria-hidden="true">▲</span>
+          </button>
+          <button class="touch-button" type="button" data-action="rightForward" aria-label="Paddle forward right">
+            <span aria-hidden="true">▼</span>
+          </button>
+        </div>
+      </section>
+    </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
