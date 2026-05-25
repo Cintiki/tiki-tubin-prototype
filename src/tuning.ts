@@ -18,5 +18,19 @@ export const tuning = {
   obstacleBounceStrength: 0.48,
   collisionSpinStrength: 2.1,
   tubeRadius: 34,
-  cameraFollowStrength: 7.5
+  cameraFollowStrength: 7.5,
+  gatePostRadius: 20,
+  gateHitCooldownMs: 450,
+  coconutPickupRadius: 42,
+  coconutThrowSpeed: 620,
+  coconutThrowRange: 520,
+  coconutThrowCooldownMs: 350,
+  coconutProjectileRadius: 9,
+  gateStages: [
+    { score: 1000, openingWidth: 105 },
+    { score: 500, openingWidth: 145 },
+    { score: 250, openingWidth: 185 },
+    { score: 100, openingWidth: 225 },
+    { score: 50, openingWidth: 265 }
+  ]
 };

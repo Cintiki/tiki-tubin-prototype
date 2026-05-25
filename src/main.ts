@@ -27,9 +27,41 @@ type CurrentStream = {
   pushX: number;
 };
 
+type Gate = {
+  id: string;
+  position: Vec;
+  stageIndex: number;
+  scored: boolean;
+  lastPostHitAt: number;
+};
+
 type StrokeFx = {
   position: Vec;
   side: StrokeSide;
+  age: number;
+  duration: number;
+};
+
+type ScorePopup = {
+  position: Vec;
+  score: number;
+  age: number;
+  duration: number;
+};
+
+type CoconutPickup = {
+  position: Vec;
+  collected: boolean;
+};
+
+type CoconutProjectile = {
+  position: Vec;
+  velocity: Vec;
+  traveled: number;
+};
+
+type ImpactFx = {
+  position: Vec;
   age: number;
   duration: number;
 };
@@ -45,6 +77,8 @@ function getRequiredCanvas() {
 }
 
 const canvas = getRequiredCanvas();
+const scoreValue = document.querySelector<HTMLElement>("#score-value");
+const coconutAmmoValue = document.querySelector<HTMLElement>("#coconut-ammo");
 
 const context = canvas.getContext("2d");
 
@@ -56,6 +90,9 @@ const ctx = context;
 const keys = new Set<string>();
 const activeTouches = new Map<number, "left" | "right">();
 const strokeFx: StrokeFx[] = [];
+const scorePopups: ScorePopup[] = [];
+const coconutProjectiles: CoconutProjectile[] = [];
+const impactFx: ImpactFx[] = [];
 const pendingStroke = {
   side: "none",
   timer: 0
@@ -88,6 +125,18 @@ const currentStreams: CurrentStream[] = [
   { x: -24, y: 1640, width: 210, height: 460, pushX: 18 }
 ];
 
+const gates: Gate[] = [
+  { id: "gate-1", position: { x: 0, y: 610 }, stageIndex: 0, scored: false, lastPostHitAt: -Infinity },
+  { id: "gate-2", position: { x: -65, y: 1320 }, stageIndex: 0, scored: false, lastPostHitAt: -Infinity },
+  { id: "gate-3", position: { x: 70, y: 2120 }, stageIndex: 0, scored: false, lastPostHitAt: -Infinity }
+];
+
+const coconutPickups: CoconutPickup[] = [
+  { position: { x: 115, y: 520 }, collected: false },
+  { position: { x: -125, y: 1040 }, collected: false },
+  { position: { x: 35, y: 1760 }, collected: false }
+];
+
 let width = 1;
 let height = 1;
 let dpr = 1;
@@ -95,6 +144,9 @@ let worldScale = 1;
 let cameraY = 0;
 let lastTime = performance.now();
 let lastAnyStroke = -Infinity;
+let playerScore = 4564;
+let coconutAmmo = 0;
+let lastCoconutThrowAt = -Infinity;
 
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -106,6 +158,16 @@ function resize() {
   canvas.style.height = `${height}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   worldScale = Math.min(1, (width - river.minVisibleMargin * 2) / river.width);
+}
+
+function updateHud() {
+  if (scoreValue) {
+    scoreValue.textContent = String(playerScore);
+  }
+
+  if (coconutAmmoValue) {
+    coconutAmmoValue.textContent = `coconuts: x${coconutAmmo}`;
+  }
 }
 
 function add(a: Vec, b: Vec): Vec {
@@ -230,11 +292,30 @@ function triggerAction(action: GameAction, now: number) {
       queueStroke("right", now);
       break;
     case "throw":
+      throwCoconut(now);
       break;
   }
 }
 
+function throwCoconut(now: number) {
+  if (coconutAmmo <= 0 || now - lastCoconutThrowAt < tuning.coconutThrowCooldownMs) {
+    return;
+  }
+
+  const direction = { x: -Math.sin(player.angle), y: Math.cos(player.angle) };
+  coconutProjectiles.push({
+    position: add(player.position, mul(direction, tuning.tubeRadius * 0.65)),
+    velocity: mul(direction, tuning.coconutThrowSpeed),
+    traveled: 0
+  });
+
+  coconutAmmo -= 1;
+  lastCoconutThrowAt = now;
+  updateHud();
+}
+
 function updatePlayer(dt: number) {
+  const previousPosition = { ...player.position };
   const localCurrent = getLocalCurrent();
   const currentInfluence = localCurrent.y - player.velocity.y;
   player.velocity.y += currentInfluence * 0.55 * dt;
@@ -267,7 +348,10 @@ function updatePlayer(dt: number) {
   player.angle += player.angularVelocity * dt;
 
   handleBankCollision();
+  handleGateCollisions(performance.now());
   handleObstacleCollisions();
+  handleGateScoring(previousPosition);
+  handleCoconutPickups();
 }
 
 function getLocalCurrent(): Vec {
@@ -329,6 +413,138 @@ function resolveCollision(normal: Vec, overlap: number, bounce: number) {
   player.angularVelocity += clamp(tangentImpact * 0.012, -1.2, 1.2) * tuning.collisionSpinStrength;
 }
 
+function getGateStage(gate: Gate) {
+  return tuning.gateStages[gate.stageIndex];
+}
+
+function getGatePostPositions(gate: Gate) {
+  const openingWidth = getGateStage(gate).openingWidth;
+  const postOffset = openingWidth / 2 + tuning.gatePostRadius;
+
+  return [
+    { x: gate.position.x - postOffset, y: gate.position.y },
+    { x: gate.position.x + postOffset, y: gate.position.y }
+  ];
+}
+
+function handleGateCollisions(now: number) {
+  for (const gate of gates) {
+    if (gate.scored) {
+      continue;
+    }
+
+    for (const postPosition of getGatePostPositions(gate)) {
+      const delta = sub(player.position, postPosition);
+      const distance = length(delta);
+      const combinedRadius = tuning.tubeRadius + tuning.gatePostRadius;
+
+      if (distance >= combinedRadius) {
+        continue;
+      }
+
+      const normal = distance > 0.001 ? mul(delta, 1 / distance) : { x: 0, y: -1 };
+      resolveCollision(normal, combinedRadius - distance, tuning.obstacleBounceStrength);
+
+      if (now - gate.lastPostHitAt >= tuning.gateHitCooldownMs) {
+        gate.stageIndex = Math.min(gate.stageIndex + 1, tuning.gateStages.length - 1);
+        gate.lastPostHitAt = now;
+      }
+    }
+  }
+}
+
+function handleGateScoring(previousPosition: Vec) {
+  for (const gate of gates) {
+    if (gate.scored) {
+      continue;
+    }
+
+    const crossedGate = previousPosition.y < gate.position.y && player.position.y >= gate.position.y;
+    const insideOpening = Math.abs(player.position.x - gate.position.x) <= getGateStage(gate).openingWidth / 2;
+
+    if (!crossedGate || !insideOpening) {
+      continue;
+    }
+
+    const score = getGateStage(gate).score;
+    gate.scored = true;
+    playerScore += score;
+    updateHud();
+    scorePopups.push({
+      position: { x: gate.position.x, y: gate.position.y - 34 },
+      score,
+      age: 0,
+      duration: 1.1
+    });
+  }
+}
+
+function handleCoconutPickups() {
+  for (const pickup of coconutPickups) {
+    if (pickup.collected) {
+      continue;
+    }
+
+    const pickupDistance = length(sub(player.position, pickup.position));
+    if (pickupDistance > tuning.tubeRadius + tuning.coconutPickupRadius) {
+      continue;
+    }
+
+    pickup.collected = true;
+    coconutAmmo += 1;
+    updateHud();
+    impactFx.push({
+      position: { ...pickup.position },
+      age: 0,
+      duration: 0.35
+    });
+  }
+}
+
+function updateCoconutProjectiles(dt: number) {
+  for (let index = coconutProjectiles.length - 1; index >= 0; index -= 1) {
+    const projectile = coconutProjectiles[index];
+    const step = mul(projectile.velocity, dt);
+    projectile.position = add(projectile.position, step);
+    projectile.traveled += length(step);
+
+    if (projectile.traveled >= tuning.coconutThrowRange || coconutHitObject(projectile)) {
+      impactFx.push({
+        position: { ...projectile.position },
+        age: 0,
+        duration: 0.28
+      });
+      coconutProjectiles.splice(index, 1);
+    }
+  }
+}
+
+function coconutHitObject(projectile: CoconutProjectile) {
+  for (const obstacle of obstacles) {
+    const hitDistance = obstacle.radius + tuning.coconutProjectileRadius;
+
+    if (length(sub(projectile.position, obstacle.position)) <= hitDistance) {
+      return true;
+    }
+  }
+
+  for (const gate of gates) {
+    if (gate.scored) {
+      continue;
+    }
+
+    for (const postPosition of getGatePostPositions(gate)) {
+      const hitDistance = tuning.gatePostRadius + tuning.coconutProjectileRadius;
+
+      if (length(sub(projectile.position, postPosition)) <= hitDistance) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function updateStrokeFx(dt: number) {
   for (const fx of strokeFx) {
     fx.age += dt;
@@ -337,6 +553,30 @@ function updateStrokeFx(dt: number) {
   for (let index = strokeFx.length - 1; index >= 0; index -= 1) {
     if (strokeFx[index].age >= strokeFx[index].duration) {
       strokeFx.splice(index, 1);
+    }
+  }
+}
+
+function updateScorePopups(dt: number) {
+  for (const popup of scorePopups) {
+    popup.age += dt;
+  }
+
+  for (let index = scorePopups.length - 1; index >= 0; index -= 1) {
+    if (scorePopups[index].age >= scorePopups[index].duration) {
+      scorePopups.splice(index, 1);
+    }
+  }
+}
+
+function updateImpactFx(dt: number) {
+  for (const fx of impactFx) {
+    fx.age += dt;
+  }
+
+  for (let index = impactFx.length - 1; index >= 0; index -= 1) {
+    if (impactFx[index].age >= impactFx[index].duration) {
+      impactFx.splice(index, 1);
     }
   }
 }
@@ -350,9 +590,14 @@ function render() {
   ctx.clearRect(0, 0, width, height);
   drawRiver();
   drawCurrentStreams();
+  drawGates();
   drawObstacles();
+  drawCoconutPickups();
+  drawCoconutProjectiles();
   drawStrokeFx();
   drawPlayer();
+  drawScorePopups();
+  drawImpactFx();
   drawTouchHints();
 }
 
@@ -472,6 +717,135 @@ function drawObstacles() {
   }
 }
 
+function drawGates() {
+  for (const gate of gates) {
+    const screen = worldToScreen(gate.position);
+
+    if (screen.y < -100 || screen.y > height + 100) {
+      continue;
+    }
+
+    const stage = getGateStage(gate);
+    const postPositions = getGatePostPositions(gate);
+    const leftPost = worldToScreen(postPositions[0]);
+    const rightPost = worldToScreen(postPositions[1]);
+    const alpha = gate.scored ? 0.35 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = gate.scored ? "rgba(223, 255, 223, 0.7)" : "rgba(255, 248, 180, 0.85)";
+    ctx.lineWidth = screenDistance(4);
+    ctx.setLineDash([screenDistance(10), screenDistance(8)]);
+    ctx.beginPath();
+    ctx.moveTo(leftPost.x + screenDistance(tuning.gatePostRadius), screen.y);
+    ctx.lineTo(rightPost.x - screenDistance(tuning.gatePostRadius), screen.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (const post of [leftPost, rightPost]) {
+      ctx.fillStyle = gate.scored ? "#77b57a" : "#ddca5f";
+      ctx.strokeStyle = gate.scored ? "#437245" : "#7d6720";
+      ctx.lineWidth = screenDistance(4);
+      ctx.beginPath();
+      ctx.arc(post.x, post.y, screenDistance(tuning.gatePostRadius), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
+      ctx.beginPath();
+      ctx.arc(post.x - screenDistance(6), post.y - screenDistance(7), screenDistance(5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = gate.scored ? "rgba(215, 255, 215, 0.88)" : "rgba(255, 250, 190, 0.92)";
+    ctx.font = `800 ${screenDistance(14)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText(gate.scored ? "cleared" : `${stage.score}`, screen.x, screen.y - screenDistance(28));
+    ctx.restore();
+  }
+}
+
+function drawCoconutPickups() {
+  for (const pickup of coconutPickups) {
+    if (pickup.collected) {
+      continue;
+    }
+
+    const screen = worldToScreen(pickup.position);
+    if (screen.y < -70 || screen.y > height + 70) {
+      continue;
+    }
+
+    drawCoconutShape(screen, screenDistance(12));
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.34)";
+    ctx.lineWidth = screenDistance(2);
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, screenDistance(tuning.coconutPickupRadius), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawCoconutProjectiles() {
+  for (const projectile of coconutProjectiles) {
+    const screen = worldToScreen(projectile.position);
+    drawCoconutShape(screen, screenDistance(tuning.coconutProjectileRadius));
+  }
+}
+
+function drawCoconutShape(screen: Vec, radius: number) {
+  ctx.save();
+  ctx.fillStyle = "#7b4d2e";
+  ctx.strokeStyle = "#4c2a18";
+  ctx.lineWidth = Math.max(1, radius * 0.22);
+  ctx.beginPath();
+  ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  ctx.beginPath();
+  ctx.arc(screen.x - radius * 0.28, screen.y - radius * 0.32, radius * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawScorePopups() {
+  for (const popup of scorePopups) {
+    const progress = popup.age / popup.duration;
+    const screen = worldToScreen({
+      x: popup.position.x,
+      y: popup.position.y - progress * 34
+    });
+
+    ctx.save();
+    ctx.globalAlpha = 1 - progress;
+    ctx.fillStyle = "#fff6a8";
+    ctx.strokeStyle = "rgba(55, 35, 0, 0.65)";
+    ctx.lineWidth = screenDistance(3);
+    ctx.font = `800 ${screenDistance(24)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.strokeText(`+${popup.score}`, screen.x, screen.y);
+    ctx.fillText(`+${popup.score}`, screen.x, screen.y);
+    ctx.restore();
+  }
+}
+
+function drawImpactFx() {
+  for (const fx of impactFx) {
+    const progress = fx.age / fx.duration;
+    const screen = worldToScreen(fx.position);
+
+    ctx.save();
+    ctx.globalAlpha = 1 - progress;
+    ctx.strokeStyle = "#fff2b0";
+    ctx.lineWidth = screenDistance(3);
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, screenDistance(8 + progress * 18), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawPlayer() {
   const screen = worldToScreen(player.position);
 
@@ -563,7 +937,10 @@ function loop(now: number) {
   lastTime = now;
 
   updatePlayer(dt);
+  updateCoconutProjectiles(dt);
   updateStrokeFx(dt);
+  updateScorePopups(dt);
+  updateImpactFx(dt);
   updateCamera(dt);
   render();
 
@@ -586,7 +963,7 @@ window.addEventListener("gesturestart", (event) => {
 
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
-  if (["a", "d", "z", "c", "arrowleft", "arrowright", " "].includes(key)) {
+  if (["a", "d", "z", "c", "x", "arrowleft", "arrowright", " "].includes(key)) {
     event.preventDefault();
   }
 
@@ -644,6 +1021,10 @@ window.addEventListener("keydown", (event) => {
     } else {
       triggerAction("rightBack", now);
     }
+  }
+
+  if (key === "x" || key === " ") {
+    triggerAction("throw", now);
   }
 });
 
@@ -736,4 +1117,5 @@ canvas.addEventListener("pointercancel", (event) => {
 });
 
 resize();
+updateHud();
 requestAnimationFrame(loop);
