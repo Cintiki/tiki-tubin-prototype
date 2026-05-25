@@ -33,11 +33,17 @@ type StrokeFx = {
   duration: number;
 };
 
-const canvas = document.querySelector<HTMLCanvasElement>("#game");
+function getRequiredCanvas() {
+  const element = document.querySelector<HTMLCanvasElement>("#game");
 
-if (!canvas) {
-  throw new Error("Canvas element was not found.");
+  if (!element) {
+    throw new Error("Canvas element was not found.");
+  }
+
+  return element;
 }
+
+const canvas = getRequiredCanvas();
 
 const context = canvas.getContext("2d");
 
